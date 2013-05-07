@@ -21,19 +21,103 @@
 #include <geekos/timer.h>
 #include <geekos/keyboard.h>
 
-static void Kernel_Thread(void * args) {
+#define SCREEN_MAX_CHARACTER    70
+
+void Kernel_Thread(void * args) {
+    
+    int rowValue = 0;
+    int columnValue = 0;
+
+    bool isNumlockOn = false;
+    bool isCapslockOn = false;
+    bool isScrlockOn = false;
     
     Keycode keyCode;
+
+    bool isSpecialKey = false;
     
     while(1) {
-        
+	     
         keyCode = Wait_For_Key();
         
-        if((keyCode & KEY_RELEASE_FLAG) == 0)
-            keyCode = KEY_RELEASE_FLAG;
+        if((keyCode & KEY_RELEASE_FLAG) != 0)
+        {
+            if(keyCode == 0x8100)
+            {
+                isSpecialKey = true;
+                continue;
+            }
+            
+            if(isSpecialKey == true){
+                
+                // Special Key로 분류되는 항목을 이 부분에서 처리.
+                
+                switch (keyCode) {
+                    case 0x8380: Print("Home "); break;
+                    case 0x8382: Print("PgUp "); break;
+                    case 0x838c: Print("Delete "); break;
+                    case 0x8388: Print("End "); break;
+                    case 0x838a: Print("PgDn "); break;
+                }
+                
+                isSpecialKey = false;
+            }
+            
+            continue;
+        }
         
-        if(keyCode != KEY_RELEASE_FLAG)
-            Print("%c", keyCode);
+        if(isSpecialKey == true)
+            continue;
+        
+        if (keyCode == 0x114) {
+            isCapslockOn = !isCapslockOn;
+            continue;
+        }
+        
+        if(keyCode == 0x115){
+            isNumlockOn = !isNumlockOn;
+            continue;
+        }
+        
+        if((keyCode & KEY_KEYPAD_FLAG) != 0)
+        {
+            if(isNumlockOn == true) {
+                
+                switch (keyCode) {
+                    case 0x388: Print("1"); break;
+                    case 0x389: Print("2"); break;
+                    case 0x38a: Print("3"); break;
+                    case 0x384: Print("4"); break;
+                    case 0x385: Print("5"); break;
+                    case 0x386: Print("6"); break;
+                    case 0x380: Print("7"); break;
+                    case 0x381: Print("8"); break;
+                    case 0x382: Print("9"); break;
+                    case 0x38b: Print("0"); break;
+                    case 0x38c: Print("."); break;
+                }
+            }
+            else {
+                switch (keyCode) {
+                    case 0x380: Print("Home "); break;
+                    case 0x382: Print("PgUp "); break;
+                    case 0x388: Print("End ");  break;
+                    case 0x38a: Print("PgDn "); break;
+                    case 0x38b: Print("Ins ");  break;
+                    case 0x38c: Print("Del");   break;
+                }
+            }
+            
+            // '-', '+'는 numlock 여부와 관련이 없으므로 if(isNumlockOn == true) {}와 독립적으로 실행한다.
+            switch (keyCode) {
+                case 0x383: Print("-"); break;
+                case 0x387: Print("+"); break;
+            }
+            
+            continue;
+        }
+
+        Print("%c", keyCode);
     }
 }
 
@@ -42,6 +126,7 @@ static void Kernel_Thread(void * args) {
  * Initializes kernel subsystems, mounts filesystems,
  * and spawns init process.
  */
+
 void Main(struct Boot_Info* bootInfo)
 {
     Init_BSS();
@@ -55,13 +140,8 @@ void Main(struct Boot_Info* bootInfo)
     Init_Timer();
     Init_Keyboard();
     
-    Set_Current_Attr(ATTRIB(BLACK, GREEN|BRIGHT));
-    Print("Welcome to GeekOS!\n");
-    Set_Current_Attr(ATTRIB(BLACK, GRAY));
-    
     Start_Kernel_Thread(Kernel_Thread, 0, PRIORITY_NORMAL, true);
     
-    /* Now this thread is done. */
     Exit(0);
 }
 

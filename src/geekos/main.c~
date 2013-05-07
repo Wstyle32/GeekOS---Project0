@@ -4,7 +4,7 @@
  * Copyright (c) 2003, Jeffrey K. Hollingsworth <hollings@cs.umd.edu>
  * Copyright (c) 2004, Iulian Neamtiu <neamtiu@cs.umd.edu>
  * $Revision: 1.51 $
- * 
+ *
  * This is free software.  You are permitted to use,
  * redistribute, and modify it as specified in the file "COPYING".
  */
@@ -21,11 +21,29 @@
 #include <geekos/timer.h>
 #include <geekos/keyboard.h>
 
+void Kernel_Thread(void * args) {
+    
+    int rowValue = 0;
+    int columnValue = 0;
 
-static void Print_Thread(void * args) {
+    bool isNumlockOn = false;
+    bool isCapslockOn = false;
+    bool isScrlockOn = false;
+    
+    Keycode keyCode;
+
 
     while(1) {
-        Print("Hello\n");
+	     
+        Get_Cursor(&rowValue, &columnValue);
+       
+        keyCode = Wait_For_Key();
+
+        if((keyCode & KEY_RELEASE_FLAG) == 0)
+            continue;
+	
+        if(keyCode != KEY_RELEASE_FLAG)
+            Print("%c", keyCode);
     }
 }
 
@@ -46,14 +64,9 @@ void Main(struct Boot_Info* bootInfo)
     Init_Traps();
     Init_Timer();
     Init_Keyboard();
-
-    Set_Current_Attr(ATTRIB(BLACK, GREEN|BRIGHT));
-    Print("Welcome to GeekOS!\n");
-    Set_Current_Attr(ATTRIB(BLACK, GRAY));
-
-    Start_Kernel_Thread(Print_Thread, 0, PRIORITY_NORMAL, true);
-
-    /* Now this thread is done. */
+    
+    Start_Kernel_Thread(Kernel_Thread, 0, PRIORITY_NORMAL, true);
+    
     Exit(0);
 }
 
