@@ -21,12 +21,18 @@
 #include <geekos/timer.h>
 #include <geekos/keyboard.h>
 
-#define SCREEN_MAX_CHARACTER    70
-
 void Kernel_Thread(void * args) {
+    
+    int i;
     
     int rowValue = 0;
     int columnValue = 0;
+    
+    int rowMaxLine = 3;
+    int rowIndicator = 0;
+    
+    int* tempHeapPtr = NULL;
+    int* endLineBuffer = (int *)Malloc(sizeof(int) * rowMaxLine);
 
     bool isNumlockOn = false;
     bool isCapslockOn = false;
@@ -36,10 +42,14 @@ void Kernel_Thread(void * args) {
 
     bool isSpecialKey = false;
     
+    Clear_Screen();
+    Put_Cursor(0, 0);
+    
     while(1) {
 	     
         keyCode = Wait_For_Key();
         
+        // Release Key 이벤트 핸들링.
         if((keyCode & KEY_RELEASE_FLAG) != 0)
         {
             if(keyCode == 0x8100)
@@ -48,11 +58,12 @@ void Kernel_Thread(void * args) {
                 continue;
             }
             
+            // Special Key로 분류되는 항목을 이 부분에서 처리.
             if(isSpecialKey == true){
                 
-                // Special Key로 분류되는 항목을 이 부분에서 처리.
-                
+                // 미구현부.
                 switch (keyCode) {
+                        
                     case 0x8380: Print("Home "); break;
                     case 0x8382: Print("PgUp "); break;
                     case 0x838c: Print("Delete "); break;
@@ -69,54 +80,124 @@ void Kernel_Thread(void * args) {
         if(isSpecialKey == true)
             continue;
         
-        if (keyCode == 0x114) {
+        if(keyCode == 0x0114) {
             isCapslockOn = !isCapslockOn;
             continue;
         }
         
-        if(keyCode == 0x115){
+        if(keyCode == 0x0115) {
             isNumlockOn = !isNumlockOn;
             continue;
         }
         
-        if((keyCode & KEY_KEYPAD_FLAG) != 0)
-        {
-            if(isNumlockOn == true) {
+        // Enter Logic
+        if(keyCode == 0x000d) {
+            
+            // 메모리 버퍼를 초과하게 될 경우, 메모리 버퍼 전체의 크기를 두 배로 늘리고 기존 내용을 복사한다.
+            if(rowIndicator >= rowMaxLine) {
                 
-                switch (keyCode) {
-                    case 0x388: Print("1"); break;
-                    case 0x389: Print("2"); break;
-                    case 0x38a: Print("3"); break;
-                    case 0x384: Print("4"); break;
-                    case 0x385: Print("5"); break;
-                    case 0x386: Print("6"); break;
-                    case 0x380: Print("7"); break;
-                    case 0x381: Print("8"); break;
-                    case 0x382: Print("9"); break;
-                    case 0x38b: Print("0"); break;
-                    case 0x38c: Print("."); break;
+                rowMaxLine = 2 * rowMaxLine;
+                
+                tempHeapPtr = endLineBuffer;
+                endLineBuffer = (int *)Malloc(sizeof(int) * rowMaxLine);
+                
+                for(i = 0; i < rowMaxLine / 2; i++) {
+                    endLineBuffer[i] = tempHeapPtr[i];
                 }
+                
+                Free(tempHeapPtr);
+                tempHeapPtr = NULL;
+            }
+            
+            Get_Cursor(&rowValue, &columnValue);
+            endLineBuffer[rowValue] = columnValue + 1;
+            
+            Print("\n");
+            rowIndicator++;
+            
+            continue;
+        }
+        
+        // Backspace Logic
+        if(keyCode == 0x0008) {
+            
+            Get_Cursor(&rowValue, &columnValue);
+            
+            if(columnValue == 0) {
+                
+                if(rowValue == 0) continue;
+                
+                Put_Cursor(rowValue - 1, endLineBuffer[--rowIndicator] - 1);
             }
             else {
+                
+                Put_Cursor(rowValue, columnValue - 1);
+                Print(" ");
+                Put_Cursor(rowValue, columnValue - 1);
+            }
+            
+            continue;
+        }
+        
+        // Ctrl Key 이벤트 핸들링.
+        if((keyCode & KEY_CTRL_FLAG) != 0) {
+            
+            if (keyCode == 0x4064) {
+                
+                Clear_Screen();
+                Put_Cursor(0, 0);
+            }
+            
+            continue;
+        }
+        
+        // 키 패드 이벤트 핸들링.
+        if((keyCode & KEY_KEYPAD_FLAG) != 0)
+        {
+            if(isNumlockOn == true)
+            {
                 switch (keyCode) {
-                    case 0x380: Print("Home "); break;
-                    case 0x382: Print("PgUp "); break;
-                    case 0x388: Print("End ");  break;
-                    case 0x38a: Print("PgDn "); break;
-                    case 0x38b: Print("Ins ");  break;
-                    case 0x38c: Print("Del");   break;
+                        
+                    case 0x0388: Print("1"); break;
+                    case 0x0389: Print("2"); break;
+                    case 0x038a: Print("3"); break;
+                    case 0x0384: Print("4"); break;
+                    case 0x0385: Print("5"); break;
+                    case 0x0386: Print("6"); break;
+                    case 0x0380: Print("7"); break;
+                    case 0x0381: Print("8"); break;
+                    case 0x0382: Print("9"); break;
+                    case 0x038b: Print("0"); break;
+                    case 0x038c: Print("."); break;
+                }
+            }
+            else
+            {
+                // 미구현부.
+                switch (keyCode) {
+                        
+                    case 0x0380: Print("Home "); break;
+                    case 0x0382: Print("PgUp "); break;
+                    case 0x0388: Print("End ");  break;
+                    case 0x038a: Print("PgDn "); break;
+                    case 0x038b: Print("Ins ");  break;
+                    case 0x038c: Print("Del");   break;
                 }
             }
             
             // '-', '+'는 numlock 여부와 관련이 없으므로 if(isNumlockOn == true) {}와 독립적으로 실행한다.
             switch (keyCode) {
-                case 0x383: Print("-"); break;
-                case 0x387: Print("+"); break;
+                    
+                case 0x0383: Print("-"); break;
+                case 0x0387: Print("+"); break;
             }
             
             continue;
         }
 
+        // Plain Character Key 이벤트 핸들링.
+        // Memory Buffer 구현시 저장 루틴까지 구현해야 함.
+        
         Print("%c", keyCode);
     }
 }
