@@ -21,32 +21,82 @@
 #include <geekos/timer.h>
 #include <geekos/keyboard.h>
 
+#define SCREEN_WIDTH    80
+#define SCREEN_HEIGHT   24
+#define SCREEN_SIZE     SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(char)
+
+
+// Global Variables
+
+int indicator = 0;          // 다음 문자가 입력될 위치를 가리키는 변수.
+int pageIndex = 0;
+
+char* tempHeapPtr = NULL;
+char* screenBuffer = NULL;
+
+int rowValue = 0;
+int columnValue = 0;
+
+// Function Prototypes
+
+void Kernel_Thread(void * args);
+
+void Display(int pageIndex);
+
+void Buffer(char data);
+void* Calloc(int size);
+
+void GetBack();
+void GetDelete();
+
+/*
+ * Kernel C code entry point.
+ * Initializes kernel subsystems, mounts filesystems,
+ * and spawns init process.
+ */
+
+void Main(struct Boot_Info* bootInfo)
+{
+    Init_BSS();
+    Init_Screen();
+    Init_Mem(bootInfo);
+    Init_CRC32();
+    Init_TSS();
+    Init_Interrupts();
+    Init_Scheduler();
+    Init_Traps();
+    Init_Timer();
+    Init_Keyboard();
+    
+    Start_Kernel_Thread(Kernel_Thread, 0, PRIORITY_NORMAL, true);
+    
+    Exit(0);
+}
+
+
 void Kernel_Thread(void * args) {
     
+    int j, k;   // 테스트용 변수: 삭제 필요.
     int i;
     
-    int rowValue = 0;
-    int columnValue = 0;
     
-    int rowMaxLine = 3;
-    int rowIndicator = 0;
-    
-    int* tempHeapPtr = NULL;
-    int* endLineBuffer = (int *)Malloc(sizeof(int) * rowMaxLine);
-
     bool isNumlockOn = false;
     bool isCapslockOn = false;
     bool isScrlockOn = false;
     
     Keycode keyCode;
-
+    
     bool isSpecialKey = false;
+    
+    // Initializations
+    
+    screenBuffer = (char *)Calloc(SCREEN_SIZE);
     
     Clear_Screen();
     Put_Cursor(0, 0);
     
     while(1) {
-	     
+        
         keyCode = Wait_For_Key();
         
         // Release Key 이벤트 핸들링.
@@ -64,11 +114,16 @@ void Kernel_Thread(void * args) {
                 // 미구현부.
                 switch (keyCode) {
                         
-                    case 0x8380: Print("Home "); break;
-                    case 0x8382: Print("PgUp "); break;
-                    case 0x838c: Print("Delete "); break;
-                    case 0x8388: Print("End "); break;
-                    case 0x838a: Print("PgDn "); break;
+                    case 0x8381: Print("L"); break;
+                    case 0x8389: Print("D"); break;
+                    case 0x8384: Print("L"); break;
+                    case 0x8386: Print("R"); break;
+                        
+                    case 0x8380: Print("Home"); break;
+                    case 0x8382: Print("PgUp"); break;
+                    case 0x838c: Print("Delete"); break;
+                    case 0x8388: Print("End"); break;
+                    case 0x838a: Print("PgDn"); break;
                 }
                 
                 isSpecialKey = false;
@@ -80,7 +135,9 @@ void Kernel_Thread(void * args) {
         if(isSpecialKey == true)
             continue;
         
+        // 미구현부: LED PORT 반영.
         if(keyCode == 0x0114) {
+            
             isCapslockOn = !isCapslockOn;
             continue;
         }
@@ -90,52 +147,23 @@ void Kernel_Thread(void * args) {
             continue;
         }
         
+        if(keyCode == 0x0116) { // 확인 필요.
+            isScrlockOn = !isScrlockOn;
+            continue;
+        }
+        
+        
         // Enter Logic
         if(keyCode == 0x000d) {
             
-            // 메모리 버퍼를 초과하게 될 경우, 메모리 버퍼 전체의 크기를 두 배로 늘리고 기존 내용을 복사한다.
-            if(rowIndicator >= rowMaxLine) {
-                
-                rowMaxLine = 2 * rowMaxLine;
-                
-                tempHeapPtr = endLineBuffer;
-                endLineBuffer = (int *)Malloc(sizeof(int) * rowMaxLine);
-                
-                for(i = 0; i < rowMaxLine / 2; i++) {
-                    endLineBuffer[i] = tempHeapPtr[i];
-                }
-                
-                Free(tempHeapPtr);
-                tempHeapPtr = NULL;
-            }
-            
-            Get_Cursor(&rowValue, &columnValue);
-            endLineBuffer[rowValue] = columnValue + 1;
-            
-            Print("\n");
-            rowIndicator++;
-            
+            Buffer('\n');
             continue;
         }
         
         // Backspace Logic
         if(keyCode == 0x0008) {
             
-            Get_Cursor(&rowValue, &columnValue);
-            
-            if(columnValue == 0) {
-                
-                if(rowValue == 0) continue;
-                
-                Put_Cursor(rowValue - 1, endLineBuffer[--rowIndicator] - 1);
-            }
-            else {
-                
-                Put_Cursor(rowValue, columnValue - 1);
-                Print(" ");
-                Put_Cursor(rowValue, columnValue - 1);
-            }
-            
+            GetBack();
             continue;
         }
         
@@ -146,6 +174,29 @@ void Kernel_Thread(void * args) {
                 
                 Clear_Screen();
                 Put_Cursor(0, 0);
+            }
+            
+            continue;
+        }
+        
+        if(0x0101 <= keyCode && keyCode <= 0x010c)
+        {
+            switch (keyCode) {
+                    
+                case 0x0101: Print("F1"); break;
+                case 0x0102: Print("F2"); break;
+                case 0x0103: Print("F3"); break;
+                case 0x0104: Print("F4"); break;
+                case 0x0105: Print("F5"); break;
+                case 0x0106: Print("F6"); break;
+                case 0x0107: Print("F7"); break;
+                case 0x0108: Print("F8"); break;
+                case 0x0109: Print("F9"); break;
+                case 0x010a: Print("F10"); break;
+                case 0x010b: Print("F11"); break;
+                case 0x010c: Print("F12"); break;
+                    
+                default: break;
             }
             
             continue;
@@ -173,19 +224,23 @@ void Kernel_Thread(void * args) {
             }
             else
             {
-                // 미구현부.
                 switch (keyCode) {
                         
-                    case 0x0380: Print("Home "); break;
-                    case 0x0382: Print("PgUp "); break;
-                    case 0x0388: Print("End ");  break;
-                    case 0x038a: Print("PgDn "); break;
-                    case 0x038b: Print("Ins ");  break;
-                    case 0x038c: Print("Del");   break;
+                    case 0x0381: Print("U"); break;
+                    case 0x0389: Print("D"); break;
+                    case 0x0384: Print("L"); break;
+                    case 0x0386: Print("R"); break;
+                        
+                    case 0x0380: Print("Home"); break;
+                    case 0x0382: Print("PgUp"); break;
+                    case 0x0388: Print("End");  break;
+                    case 0x038a: Print("PgDn"); break;
+                    case 0x038b: Print("Ins");  break;
+                    case 0x038c: GetDelete();   break;
                 }
             }
             
-            // '-', '+'는 numlock 여부와 관련이 없으므로 if(isNumlockOn == true) {}와 독립적으로 실행한다.
+            // '-', '+'는 numlock 여부와 관련이 없으므로 'if(isNumlockOn == true) { ... }'와 독립적으로 실행한다.
             switch (keyCode) {
                     
                 case 0x0383: Print("-"); break;
@@ -194,43 +249,100 @@ void Kernel_Thread(void * args) {
             
             continue;
         }
-
+        
         // Plain Character Key 이벤트 핸들링.
+        // 대소문자 및 키보드 레이아웃 반영해야 함: Keycode Convert(Mode mode, Keycode input)
         // Memory Buffer 구현시 저장 루틴까지 구현해야 함.
         
-        Print("%c", keyCode);
+        Buffer(keyCode);
     }
 }
 
-/*
- * Kernel C code entry point.
- * Initializes kernel subsystems, mounts filesystems,
- * and spawns init process.
- */
-
-void Main(struct Boot_Info* bootInfo)
-{
-    Init_BSS();
-    Init_Screen();
-    Init_Mem(bootInfo);
-    Init_CRC32();
-    Init_TSS();
-    Init_Interrupts();
-    Init_Scheduler();
-    Init_Traps();
-    Init_Timer();
-    Init_Keyboard();
+void Buffer(char data) {
     
-    Start_Kernel_Thread(Kernel_Thread, 0, PRIORITY_NORMAL, true);
-    
-    Exit(0);
+    Print("%c", data);
+    screenBuffer[indicator++] = data;
 }
 
+void GetBack() {
+    
+    int i;
+    int count = 0;
+    
+    Get_Cursor(&rowValue, &columnValue);
+    
+    while (indicator > 0) {
+        
+        if(screenBuffer[indicator] == 0) {
+            
+            screenBuffer[--indicator] = 0;
+            break;
+        }
+        
+        screenBuffer[indicator - 1] = screenBuffer[indicator];
+        indicator++;
+    }
+    
+    Display(pageIndex);
+    
+    
+    if(columnValue != 0) {
+        
+        Put_Cursor(rowValue, columnValue -1);
+    }
+    else {
+        
+        i = indicator - 1;
+        
+        while(i != 0 && screenBuffer[i - 1] != '\n') {
+            
+            i--;
+            count++;
+        }
+        
+        Put_Cursor(rowValue - 1, count + 1);
+    }
+}
 
+void GetDelete() {
+    
+    indicator--;
+    GetBack();
+}
 
+void Display(int pageIndex) {
+    
+    int i;
+    char temp;
+    
+    Get_Cursor(&rowValue, &columnValue);
+    Put_Cursor(0, 0);
+    
+    Clear_Screen();
 
+    for(i = 0; i < SCREEN_SIZE; i++) {
 
+        temp = screenBuffer[pageIndex * SCREEN_SIZE + i];
+        
+        if(temp == 0)
+            break;
+        
+        Print("%c", temp);
+    }
+    
+    Put_Cursor(rowValue, columnValue);
+}
 
+void* Calloc(int size) {
+    
+    int i;
+    char* allocator = (void *)Malloc(size);
+    
+    for(i = 0; i < size; i++)
+        allocator[i] = 0;
+    
+    return (void *)allocator;
+}
 
 
 
