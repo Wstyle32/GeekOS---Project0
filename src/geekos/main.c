@@ -25,6 +25,7 @@
 #define SCREEN_HEIGHT   24
 #define SCREEN_SIZE     SCREEN_WIDTH * SCREEN_HEIGHT * sizeof(char)
 
+#define KEYBOARD_LAYOUT 36
 
 // Global Variables
 
@@ -37,6 +38,9 @@ char* screenBuffer = NULL;
 int rowValue = 0;
 int columnValue = 0;
 
+Keycode qwertyLayout[KEYBOARD_LAYOUT] {};
+Keycode dvorakLayout[KEYBOARD_LAYOUT] {};
+
 // Function Prototypes
 
 void Kernel_Thread(void * args);
@@ -48,6 +52,9 @@ void* Calloc(int size);
 
 void GetBack();
 void GetDelete();
+
+char Convert(Keycode* input);
+char ChangeLayout(Keycode* input);
 
 /*
  * Kernel C code entry point.
@@ -76,9 +83,7 @@ void Main(struct Boot_Info* bootInfo)
 
 void Kernel_Thread(void * args) {
     
-    int j, k;   // 테스트용 변수: 삭제 필요.
     int i;
-    
     
     bool isNumlockOn = false;
     bool isCapslockOn = false;
@@ -94,6 +99,8 @@ void Kernel_Thread(void * args) {
     
     Clear_Screen();
     Put_Cursor(0, 0);
+    
+    // End initializations
     
     while(1) {
         
@@ -114,15 +121,15 @@ void Kernel_Thread(void * args) {
                 // 미구현부.
                 switch (keyCode) {
                         
-                    case 0x8381: Print("L"); break;
+                    case 0x8381: Print("U"); break;
                     case 0x8389: Print("D"); break;
                     case 0x8384: Print("L"); break;
                     case 0x8386: Print("R"); break;
                         
                     case 0x8380: Print("Home"); break;
                     case 0x8382: Print("PgUp"); break;
-                    case 0x838c: Print("Delete"); break;
-                    case 0x8388: Print("End"); break;
+                    case 0x838c: GetDelete();   break;
+                    case 0x8388: Print("End");  break;
                     case 0x838a: Print("PgDn"); break;
                 }
                 
@@ -137,7 +144,6 @@ void Kernel_Thread(void * args) {
         
         // 미구현부: LED PORT 반영.
         if(keyCode == 0x0114) {
-            
             isCapslockOn = !isCapslockOn;
             continue;
         }
@@ -202,24 +208,24 @@ void Kernel_Thread(void * args) {
             continue;
         }
         
-        // 키 패드 이벤트 핸들링.
+        // 키패드 이벤트 핸들링.
         if((keyCode & KEY_KEYPAD_FLAG) != 0)
         {
             if(isNumlockOn == true)
             {
                 switch (keyCode) {
                         
-                    case 0x0388: Print("1"); break;
-                    case 0x0389: Print("2"); break;
-                    case 0x038a: Print("3"); break;
-                    case 0x0384: Print("4"); break;
-                    case 0x0385: Print("5"); break;
-                    case 0x0386: Print("6"); break;
-                    case 0x0380: Print("7"); break;
-                    case 0x0381: Print("8"); break;
-                    case 0x0382: Print("9"); break;
-                    case 0x038b: Print("0"); break;
-                    case 0x038c: Print("."); break;
+                    case 0x0388: Buffer("1"); break;
+                    case 0x0389: Buffer("2"); break;
+                    case 0x038a: Buffer("3"); break;
+                    case 0x0384: Buffer("4"); break;
+                    case 0x0385: Buffer("5"); break;
+                    case 0x0386: Buffer("6"); break;
+                    case 0x0380: Buffer("7"); break;
+                    case 0x0381: Buffer("8"); break;
+                    case 0x0382: Buffer("9"); break;
+                    case 0x038b: Buffer("0"); break;
+                    case 0x038c: Buffer("."); break;
                 }
             }
             else
@@ -236,15 +242,15 @@ void Kernel_Thread(void * args) {
                     case 0x0388: Print("End");  break;
                     case 0x038a: Print("PgDn"); break;
                     case 0x038b: Print("Ins");  break;
-                    case 0x038c: GetDelete();   break;
+                    case 0x038c: GetDelete();  break;
                 }
             }
             
             // '-', '+'는 numlock 여부와 관련이 없으므로 'if(isNumlockOn == true) { ... }'와 독립적으로 실행한다.
             switch (keyCode) {
                     
-                case 0x0383: Print("-"); break;
-                case 0x0387: Print("+"); break;
+                case 0x0383: Buffer('-'); break;
+                case 0x0387: Buffer('+'); break;
             }
             
             continue;
@@ -253,6 +259,12 @@ void Kernel_Thread(void * args) {
         // Plain Character Key 이벤트 핸들링.
         // 대소문자 및 키보드 레이아웃 반영해야 함: Keycode Convert(Mode mode, Keycode input)
         // Memory Buffer 구현시 저장 루틴까지 구현해야 함.
+        
+        if(isCapslockOn == true)
+            Convert(&keyCode);
+        
+        if(isScrlockOn == true)
+            ChangeLayout(&keyCode);
         
         Buffer(keyCode);
     }
@@ -283,9 +295,10 @@ void GetBack() {
         indicator++;
     }
     
+    // 변경 사항 적용을 위해 다시 그림.
     Display(pageIndex);
     
-    
+    // 커서 위치 갱신.
     if(columnValue != 0) {
         
         Put_Cursor(rowValue, columnValue -1);
@@ -306,8 +319,7 @@ void GetBack() {
 
 void GetDelete() {
     
-    indicator--;
-    GetBack();
+    // 미구현부.
 }
 
 void Display(int pageIndex) {
@@ -325,7 +337,7 @@ void Display(int pageIndex) {
         temp = screenBuffer[pageIndex * SCREEN_SIZE + i];
         
         if(temp == 0)
-            break;
+            return;
         
         Print("%c", temp);
     }
@@ -338,11 +350,32 @@ void* Calloc(int size) {
     int i;
     char* allocator = (void *)Malloc(size);
     
-    for(i = 0; i < size; i++)
+    for (i = 0; i < size; i++)
         allocator[i] = 0;
     
     return (void *)allocator;
 }
 
+char Convert(Keycode* input) {
+    
+    if ('a' <= *input && *input <= 'z')
+        *input = *input - 32;
+    else if ('A' <= *input && *input <= 'Z')
+        *input = *input + 32;
+    
+    return *input;
+}
 
+char ChangeLayout(Keycode* input) {
+    
+    int i;
+    
+    for(i = 0; i < KEYBOARD_LAYOUT; i++) {
+        
+        if(qwertyLayout[i] == *input)
+            return dvorakLayout[i];
+    }
+    
+    return 0;
+}
 
