@@ -38,8 +38,8 @@ char* screenBuffer = NULL;
 int rowValue = 0;
 int columnValue = 0;
 
-Keycode qwertyLayout[KEYBOARD_LAYOUT] {};
-Keycode dvorakLayout[KEYBOARD_LAYOUT] {};
+Keycode qwertyLayout[KEYBOARD_LAYOUT];
+Keycode dvorakLayout[KEYBOARD_LAYOUT];
 
 // Function Prototypes
 
@@ -50,7 +50,7 @@ void Display(int pageIndex);
 void Buffer(char data);
 void* Calloc(int size);
 
-void GetBack();
+void GetBackspace();
 void GetDelete();
 
 char Convert(Keycode* input);
@@ -144,6 +144,7 @@ void Kernel_Thread(void * args) {
         
         // 미구현부: LED PORT 반영.
         if(keyCode == 0x0114) {
+            
             isCapslockOn = !isCapslockOn;
             continue;
         }
@@ -169,7 +170,7 @@ void Kernel_Thread(void * args) {
         // Backspace Logic
         if(keyCode == 0x0008) {
             
-            GetBack();
+            GetBackspace();
             continue;
         }
         
@@ -276,7 +277,7 @@ void Buffer(char data) {
     screenBuffer[indicator++] = data;
 }
 
-void GetBack() {
+void GetBackspace() {
     
     int i;
     int count = 0;
@@ -319,7 +320,14 @@ void GetBack() {
 
 void GetDelete() {
     
-    // 미구현부.
+    int i = indicator;
+    
+    while(screenBuffer[i] != 0) {
+        screenBuffer[i] = screenBuffer[i + 1];
+        i++;
+    }
+    
+    Display(pageIndex);
 }
 
 void Display(int pageIndex) {
