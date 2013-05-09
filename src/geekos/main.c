@@ -8,6 +8,8 @@
  * This is free software.  You are permitted to use,
  * redistribute, and modify it as specified in the file "COPYING".
  */
+ 
+ //테스트 입니다
 
 #include <geekos/bootinfo.h>
 #include <geekos/string.h>
